@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copa Del NU: Wheel of Shame</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: clamp(12px, 4vw, 24px);
+    background: #0d1410;
+    display: flex;
+    justify-content: center;
+  }
+  #app { max-width: 760px; width: 100%; }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  input, textarea {
+    font-family: inherit;
+    border: 1px solid #cfc6b3;
+    border-radius: 4px;
+    background: #fffdf8;
+    color: #2a1f14;
+  }
+  button:disabled { opacity: 0.35; cursor: default; }
+</style>
+</head>
+<body>
+<div id="app" style="font-family:Calibri, 'Segoe UI', Candara, sans-serif; background:linear-gradient(160deg, #14231b 0%, #1b2b20 55%, #16211a 100%); border-radius:10px; padding:clamp(14px, 5vw, 28px); position:relative; overflow:hidden; box-sizing:border-box; width:100%; max-width:600px; margin:0 auto;">
+  <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:repeating-linear-gradient(90deg, transparent 0 74px, rgba(255,255,255,0.025) 74px 78px); pointer-events:none;"></div>
+  <div style="position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, transparent, #a8863f, transparent);"></div>
+  <div style="font-size:11px; color:#a8863f; font-weight:700; letter-spacing:2.5px; margin-bottom:6px; position:relative;">FANTASY FOOTBALL &middot; WEEKLY DECREE</div>
+  <h2 style="font-weight:700; font-size:25px; margin:0 0 4px; color:#f2ead9; position:relative; letter-spacing:0.2px;">Copa Del NU: Wheel of Shame</h2>
+  <p style="color:#8a9b8e; font-size:14px; margin:0 0 1.5rem; font-weight:500; position:relative;" id="subtitle">Loading your list...</p>
+
+  <div style="display:flex; flex-direction:column; gap:2rem; align-items:center;">
+    <div style="flex:0 0 auto; margin:0 auto; text-align:center;">
+      <div style="position:relative; width:min(360px, 82vw); height:min(360px, 82vw); margin:0 auto; filter:drop-shadow(0 8px 18px rgba(0,0,0,0.45));">
+        <div style="position:absolute; top:0px; left:50%; transform:translateX(-50%); z-index:2; width:0; height:0; border-left:11px solid transparent; border-right:11px solid transparent; border-top:18px solid #a8863f;"></div>
+        <canvas id="wheel" width="360" height="360" style="display:block; width:100%; height:100%;"></canvas>
+      </div>
+      <div style="text-align:center; margin-top:1.25rem;">
+        <button id="spinBtn" style="width:min(210px, 70vw); font-weight:700; font-size:15px; font-family:Calibri, 'Segoe UI', Candara, sans-serif; background:#2a1f14; color:#e8d5a8; border:1px solid #a8863f; border-radius:4px; padding:13px 0; letter-spacing:1.5px; text-transform:uppercase;">Spin</button>
+      </div>
+      <div id="resultBox" style="display:none; margin-top:1rem; text-align:center; background:#1f2b21; border:1px solid #a8863f; border-radius:6px; padding:14px 16px;">
+        <div style="font-size:11px; color:#a8863f; font-weight:700; text-transform:uppercase; letter-spacing:1.8px;">This Week's Sentence</div>
+        <div id="resultText" style="font-size:18px; font-weight:700; color:#f2ead9; margin-top:4px;"></div>
+      </div>
+    </div>
+
+    <div style="width:100%; max-width:520px; background:#f1ece0; border-radius:8px; padding:18px; position:relative;">
+      <div style="font-size:12px; color:#3a2a1a; margin-bottom:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px;">Punishments &middot; numbers match the wheel</div>
+      <div id="list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></div>
+      <div style="display:flex; gap:8px;">
+        <input id="newItem" type="text" placeholder="Add a punishment" style="flex:1; font-family:Calibri, 'Segoe UI', Candara, sans-serif; font-size:15px; font-weight:600;" />
+        <button id="addBtn" style="background:#2a1f14; color:#e8d5a8; border:1px solid #a8863f; border-radius:4px; width:38px; font-size:18px;">+</button>
+      </div>
+      <div id="errorMsg" style="display:none; font-size:13px; color:#c0392b; margin-top:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+<script>
+(function() {
+  const DEFAULTS = [
+    "Loser's Gains: Record yourself doing 1 pushup OR 2 squats for every point you score lower than the highest point total of the week. Breaks allowed but we will time you and judge you",
+    "The Involuntary Talent Show: Record yourself doing a >20 second dance of your choice. For example, a TikTok trend, a children's song (with your kids!)",
+    "Cheers to Your Failure: Record yourself taking a shot with a cheers for why you failed this week (re-roll if you don't drink)",
+    "Hot Takes, Cold Truths: Give us your power ranking and hot takes for 4 teams: The best team, your team, and two other teams that you find interesting. Can be written or ESPN First Take video style",
+    "Portrait of a Champion: Draw a picture that complements and symbolizes the high scorer. Low-effort drawings will be shamed until redone"
+  ];
+
+  const colorRamp = ['#4a1f1f','#1f3d2b','#3a2a1a','#264a5c','#4a3728','#5c4a2a','#2e2e2e','#3d3223'];
+
+  let punishments = [];
+  let rotation = 0;
+  let spinning = false;
+
+  const listEl = document.getElementById('list');
+  const canvas = document.getElementById('wheel');
+  const ctx = canvas.getContext('2d');
+  const subtitle = document.getElementById('subtitle');
+  const errorMsg = document.getElementById('errorMsg');
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+  }
+  function clearError() {
+    errorMsg.style.display = 'none';
+  }
+
+  // Paste your deployed Google Apps Script Web App URL here (see setup instructions).
+  // Leave blank to fall back to this-device-only storage.
+  const SHEET_API_URL = '';
+
+  async function save() {
+    if (SHEET_API_URL) {
+      try {
+        await fetch(SHEET_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(punishments)
+        });
+        return;
+      } catch (e) { /* fall through to local save below */ }
+    }
+    try {
+      localStorage.setItem('punishments_v3', JSON.stringify(punishments));
+    } catch (e) {}
+  }
+
+  async function load() {
+    if (SHEET_API_URL) {
+      try {
+        const res = await fetch(SHEET_API_URL);
+        const parsed = await res.json();
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          punishments = parsed;
+          subtitle.textContent = 'Shared via Google Sheet — edits sync for everyone in the league.';
+          renderList();
+          drawWheel();
+          return;
+        }
+      } catch (e) { /* fall through to local/defaults below */ }
+    }
+    try {
+      const raw = localStorage.getItem('punishments_v3');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) punishments = parsed;
+        else punishments = DEFAULTS.slice();
+      } else {
+        punishments = DEFAULTS.slice();
+      }
+    } catch (e) {
+      punishments = DEFAULTS.slice();
+    }
+    subtitle.textContent = SHEET_API_URL
+      ? 'Could not reach the shared sheet — showing this device\'s saved list.'
+      : 'Saved on this device only. Add a Google Sheet link to share across the league.';
+    renderList();
+    drawWheel();
+  }
+
+  function renderList() {
+    listEl.innerHTML = '';
+    punishments.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.gap = '8px';
+      row.style.alignItems = 'flex-start';
+
+      const badge = document.createElement('div');
+      badge.textContent = String(i + 1);
+      badge.style.width = '22px';
+      badge.style.height = '22px';
+      badge.style.borderRadius = '50%';
+      badge.style.flex = '0 0 auto';
+      badge.style.marginTop = '6px';
+      badge.style.display = 'flex';
+      badge.style.alignItems = 'center';
+      badge.style.justifyContent = 'center';
+      badge.style.fontSize = '12px';
+      badge.style.fontWeight = '500';
+      badge.style.color = '#ffffff';
+      badge.style.background = colorRamp[i % colorRamp.length];
+      row.appendChild(badge);
+
+      const input = document.createElement('textarea');
+      input.value = p;
+      input.rows = 1;
+      input.wrap = 'soft';
+      input.style.flex = '1';
+      input.style.resize = 'none';
+      input.style.overflow = 'hidden';
+      input.style.lineHeight = '1.4';
+      input.style.padding = '8px 10px';
+      input.style.fontFamily = "Calibri, 'Segoe UI', Candara, sans-serif";
+      input.style.fontSize = '15px';
+      input.style.fontWeight = '600';
+      const autoGrow = () => {
+        input.style.height = 'auto';
+        input.style.height = input.scrollHeight + 'px';
+      };
+      requestAnimationFrame(autoGrow);
+      input.addEventListener('input', autoGrow);
+      input.addEventListener('change', () => {
+        const v = input.value.trim();
+        if (!v) { showError('Punishment text cannot be empty'); input.value = punishments[i]; autoGrow(); return; }
+        clearError();
+        punishments[i] = v;
+        save();
+        drawWheel();
+      });
+      row.appendChild(input);
+
+      const moveWrap = document.createElement('div');
+      moveWrap.style.display = 'flex';
+      moveWrap.style.flexDirection = 'column';
+      moveWrap.style.gap = '2px';
+      moveWrap.style.marginTop = '2px';
+      moveWrap.style.flex = '0 0 auto';
+
+      const upBtn = document.createElement('button');
+      upBtn.textContent = "▲";
+      upBtn.setAttribute('aria-label', 'Move up');
+      upBtn.disabled = (i === 0);
+      upBtn.style.padding = '6px 10px';
+      upBtn.style.minHeight = '0';
+      upBtn.style.lineHeight = '1';
+      upBtn.addEventListener('click', () => {
+        if (i === 0) return;
+        [punishments[i - 1], punishments[i]] = [punishments[i], punishments[i - 1]];
+        save();
+        renderList();
+        drawWheel();
+      });
+
+      const downBtn = document.createElement('button');
+      downBtn.textContent = "▼";
+      downBtn.setAttribute('aria-label', 'Move down');
+      downBtn.disabled = (i === punishments.length - 1);
+      downBtn.style.padding = '6px 10px';
+      downBtn.style.minHeight = '0';
+      downBtn.style.lineHeight = '1';
+      downBtn.addEventListener('click', () => {
+        if (i === punishments.length - 1) return;
+        [punishments[i + 1], punishments[i]] = [punishments[i], punishments[i + 1]];
+        save();
+        renderList();
+        drawWheel();
+      });
+
+      moveWrap.appendChild(upBtn);
+      moveWrap.appendChild(downBtn);
+      row.appendChild(moveWrap);
+
+      const del = document.createElement('button');
+      del.textContent = "✕";
+      del.setAttribute('aria-label', 'Remove');
+      del.style.flex = '0 0 auto';
+      del.style.marginTop = '2px';
+      del.addEventListener('click', () => {
+        if (punishments.length <= 2) { showError('Keep at least 2 punishments on the wheel'); return; }
+        clearError();
+        punishments.splice(i, 1);
+        save();
+        renderList();
+        drawWheel();
+      });
+      row.appendChild(del);
+
+      listEl.appendChild(row);
+    });
+  }
+
+  function wrapLines(text, maxWidth, font) {
+    ctx.font = font;
+    const words = text.split(' ');
+    const lines = [];
+    let current = '';
+    for (const word of words) {
+      const test = current ? current + ' ' + word : word;
+      if (ctx.measureText(test).width > maxWidth && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = test;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  function drawWheel() {
+    const size = 360;
+    const cx = size / 2, cy = size / 2;
+    const rOuter = 176;
+    const rInner = 30;
+    const n = punishments.length;
+    const slice = (Math.PI * 2) / n;
+
+    ctx.clearRect(0, 0, size, size);
+
+    // outer rim
+    ctx.beginPath();
+    ctx.arc(cx, cy, rOuter + 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#2a1f14';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#a8863f';
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotation);
+    ctx.translate(-cx, -cy);
+
+    // pick font size based on slice count
+    let fontSize = n <= 4 ? 15 : n <= 6 ? 13 : n <= 8 ? 12 : 11;
+    const midR = (rOuter + rInner) / 2;
+    const bandWidth = rOuter - rInner - 16;
+
+    for (let i = 0; i < n; i++) {
+      const start = i * slice;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, rOuter, start, start + slice);
+      ctx.closePath();
+      ctx.fillStyle = colorRamp[i % colorRamp.length];
+      ctx.fill();
+      ctx.strokeStyle = '#14231b';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    const numFontSize = n <= 6 ? 48 : n <= 10 ? 38 : 30;
+    for (let i = 0; i < n; i++) {
+      const start = i * slice;
+      const center = start + slice / 2;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(center);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 ' + numFontSize + 'px Calibri, "Segoe UI", Candara, sans-serif';
+      ctx.save();
+      ctx.translate(midR, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.lineWidth = numFontSize * 0.1;
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      ctx.strokeText(String(i + 1), 0, 0);
+      ctx.fillStyle = '#e8d5a8';
+      ctx.fillText(String(i + 1), 0, 0);
+      ctx.restore();
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    // center hub styled as a football
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rInner, rInner * 0.7, Math.PI / 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#3a2a1a';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#a8863f';
+    ctx.stroke();
+    // laces
+    ctx.rotate(Math.PI / 4);
+    ctx.strokeStyle = '#e8d5a8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-rInner * 0.55, 0);
+    ctx.lineTo(rInner * 0.55, 0);
+    ctx.stroke();
+    for (let lx = -rInner * 0.4; lx <= rInner * 0.4; lx += rInner * 0.22) {
+      ctx.beginPath();
+      ctx.moveTo(lx, -5);
+      ctx.lineTo(lx, 5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function spin() {
+    if (spinning) return;
+    if (punishments.length < 2) { showError('Add at least 2 punishments first'); return; }
+    clearError();
+    spinning = true;
+    document.getElementById('resultBox').style.display = 'none';
+    document.getElementById('spinBtn').disabled = true;
+
+    const n = punishments.length;
+    const slice = (Math.PI * 2) / n;
+    const winnerIndex = Math.floor(Math.random() * n);
+    const targetSliceCenter = winnerIndex * slice + slice / 2;
+    const extraSpins = 5 + Math.random() * 2;
+    const finalRotation = rotation + (Math.PI * 2 * extraSpins) + (-Math.PI / 2 - targetSliceCenter - rotation % (Math.PI * 2));
+
+    const obj = { r: rotation };
+    anime({
+      targets: obj,
+      r: finalRotation,
+      duration: 4200,
+      easing: 'easeOutCubic',
+      update: function() {
+        rotation = obj.r;
+        drawWheel();
+      },
+      complete: function() {
+        rotation = obj.r % (Math.PI * 2);
+        drawWheel();
+        spinning = false;
+        document.getElementById('spinBtn').disabled = false;
+        document.getElementById('resultText').textContent = punishments[winnerIndex];
+        document.getElementById('resultBox').style.display = 'block';
+      }
+    });
+  }
+
+  document.getElementById('spinBtn').addEventListener('click', spin);
+
+  document.getElementById('addBtn').addEventListener('click', () => {
+    const input = document.getElementById('newItem');
+    const v = input.value.trim();
+    if (!v) { showError('Enter a punishment first'); return; }
+    clearError();
+    punishments.push(v);
+    input.value = '';
+    save();
+    renderList();
+    drawWheel();
+  });
+  document.getElementById('newItem').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('addBtn').click();
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>
